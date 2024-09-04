@@ -1,17 +1,24 @@
 import subprocess
 import os
+import argparse
 from datetime import datetime
 
 class NmapScanner:
     def __init__(self, ip):
         self.ip = ip
-        self.output = f"TCP Scan for {ip}\n"
+        self.output = f"Scanning {ip}\n"
 
     def run_tcp_scan(self):
-        nmap_tcp_command = f"nmap -sS -p- -sV -sC -O -Pn {self.ip}"
+        nmap_tcp_command = f"nmap -sS -p- -sV -sC -O {self.ip}"
         nmap_tcp_output = run_command(nmap_tcp_command)
         print(f"TCP Scan Output:\n{nmap_tcp_output}")  # Debugging output
-        self.output += nmap_tcp_output + "\n"
+        self.output += f"Below is TCP scan output for {self.ip}:\n" + nmap_tcp_output + "\n"
+
+    def run_udp_scan(self):
+        nmap_udp_command = f"nmap -sU -p- -sV -sC -O {self.ip}"
+        nmap_udp_output = run_command(nmap_udp_command)
+        print(f"UDP Scan Output:\n{nmap_udp_output}")  # Debugging output
+        self.output += f"Below is UDP scan output for {self.ip}:\n" + nmap_udp_output + "\n"
 
     def check_open_ports(self):
         for line in self.output.splitlines():
@@ -24,6 +31,8 @@ class NmapScanner:
         if port == '21':
             self.output += run_command(f'nmap --script ftp* {self.ip}') + "\n"
         elif port == '22':
+            self.output += run_command(f'python3 sshaudit.py {self.ip}') + "\n"
+            self.output += run_command(f'python3 Libauth.py {self.ip}') + "\n"
             self.output += run_command(f'nmap --script ssh* {self.ip}') + "\n"
         elif port == '23':
             self.output += run_command(f'nmap --script telnet* {self.ip}') + "\n"
@@ -42,6 +51,7 @@ class NmapScanner:
             self.output += run_command(f'nmap --script https*,ssl* {self.ip}') + "\n"
         elif port == '445':
             self.output += run_command(f'smbmap -h {self.ip}') + "\n"
+            self.output += run_command(f'python3 enum4linux-ng {self.ip}') + "\n"
             self.output += run_command(f'smbclient -L {self.ip}') + "\n"
             self.output += run_command(f'nmap --script smb* {self.ip}') + "\n"
         elif port == '1443':
@@ -55,9 +65,11 @@ class Scanner:
         self.ip = ip
         self.output = ""
 
-    def run(self):
+    def run(self, run_udp):
         nmap_scanner = NmapScanner(self.ip)
         nmap_scanner.run_tcp_scan()
+        if run_udp:
+            nmap_scanner.run_udp_scan()
         nmap_scanner.check_open_ports()
         self.output += nmap_scanner.output
 
@@ -73,6 +85,11 @@ def run_command(command):
         return str(e)
 
 def main():
+    # Argument parser to handle command-line arguments
+    parser = argparse.ArgumentParser(description="Run Nmap scans on specified IP addresses.")
+    parser.add_argument('--udp', action='store_true', help="Include UDP scans.")
+    args = parser.parse_args()
+
     # Check if the input file exists
     if not os.path.exists('iplist.txt'):
         print("iplist.txt not found.")
@@ -90,7 +107,7 @@ def main():
         ip = ip.strip()
         if ip:
             scanner = Scanner(ip)
-            scanner.run()
+            scanner.run(args.udp)  # Pass the --udp argument
             results.append(scanner.output)
 
     # Save results to a text file
